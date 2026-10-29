@@ -59,3 +59,36 @@ export function calculateScore(call: number, tricks: number, ruleId: ScoringId =
 export function isCallMade(call: number, tricks: number): boolean {
   return tricks >= call;
 }
+
+export type ScoreParse = { ok: true; call: number; tricks: number; score: number } | { ok: false; error: string };
+
+/**
+ * Table-entry helper: turns a typed signed score ("4.1", "+5", "-4") into the call/tricks pair that produces it,
+ * so the round is still stored (and every total, winner and stat is still derived) from call + tricks.
+ * A failed call (negative score) is stored as `tricks = 0` because the real trick count is unknown.
+ */
+export function parseScoreText(raw: string, ruleId: ScoringId = 'standard'): ScoreParse {
+  const text = raw.trim().replace(/[\u2212\u2013]/g, '-').replace(',', '.');
+  if (text === '') return { ok: false, error: 'enter a score' };
+  const m = /^([+-]?)(\d{1,2})(?:\.(\d))?$/.exec(text);
+  if (!m) return { ok: false, error: 'use a score like 4.1, 5 or -4' };
+  const negative = m[1] === '-';
+  const whole = Number(m[2]);
+  const tenth = m[3] ? Number(m[3]) : 0;
+  let call: number;
+  let tricks: number;
+  if (negative && (whole > 0 || tenth > 0)) {
+    if (tenth !== 0) return { ok: false, error: 'a failed call is a whole number, like -4' };
+    call = whole;
+    tricks = 0;
+  } else {
+    call = whole;
+    tricks = whole + tenth;
+  }
+  if (!isValidCall(call)) return { ok: false, error: `a call can't be more than ${MAX_CALL}` };
+  if (!isValidTricks(tricks)) return { ok: false, error: `tricks can't be more than ${MAX_TRICKS}` };
+  const score = calculateScore(call, tricks, ruleId);
+  const expected = negative && (whole > 0 || tenth > 0) ? -(whole + tenth / 10) : whole + tenth / 10;
+  if (Math.abs(score - expected) > 1e-9) return { ok: false, error: `${text} isn't possible with ${getScoringRule(ruleId).name} scoring` };
+  return { ok: true, call, tricks, score };
+}

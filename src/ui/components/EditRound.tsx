@@ -19,7 +19,9 @@ export function EditRoundSheet({ match, roundNumber, onClose }: { match: Match; 
 
   const save = () => {
     const entries = entriesFrom(match, calls, tricks);
-    const v = validateEntries(entries, match.players, { enforceThirteen: false });
+    // Rounds typed into the score table have inferred tricks that may add up to more than 13; don't block editing those.
+    const originalTotal = round.entries.reduce((a, e) => a + e.tricks, 0);
+    const v = validateEntries(entries, match.players, { enforceThirteen: false, ignoreTotal: originalTotal > 13 });
     if (!v.ok) { setErrors(v.errors); return; }
     void actions.saveMatch(updateRound(match, roundNumber, entries));
     toast(`Round ${roundNumber} updated – totals recalculated`, 'success');

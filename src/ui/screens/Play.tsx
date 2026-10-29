@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { play } from '../../audio/audio';
 import { addRound, computeTotals, finishMatch, getUnits, isTeamMatch, scoreRound, undoLastRound, validateEntries } from '../../domain/match';
-import { isCallMade } from '../../domain/scoring';
-import type { Match, RoundDraft } from '../../domain/types';
+import { isCallMade, parseScoreText } from '../../domain/scoring';
+import type { Match, RoundDraft, RoundEntry } from '../../domain/types';
 import { fmt } from '../../domain/util';
 import { actions, getState, toast, useStore } from '../../state/store';
 import { Burst, EditRoundSheet, entriesFrom } from '../components/EditRound';
@@ -11,6 +11,7 @@ import { Scoreboard } from '../components/Scoreboard';
 import { Screen } from '../components/Screen';
 import { Avatar, confirmDialog, Empty, Sheet } from '../components/common';
 import { RoundForm } from '../components/RoundForm';
+import { entryErrors, ScoreSheet, scoreText } from '../components/ScoreSheet';
 import { go } from '../router';
 
 const DEFAULT_DRAFT: RoundDraft = { calls: [1, 1, 1, 1], tricks: [0, 0, 0, 0], step: 'calls' };
@@ -23,6 +24,9 @@ export function PlayScreen({ matchId }: { matchId: string }) {
   const [showTable, setShowTable] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [burst, setBurst] = useState(0);
+  /** Table entry: one typed score string per player, in match.players order. */
+  const [texts, setTexts] = useState<string[]>(() => (match?.players ?? []).map(() => ''));
+  const [showErrors, setShowErrors] = useState(false);
 
   if (!ready) return <Screen><div className="loading" aria-label="Loading">♠</div></Screen>;
   if (!match) {
@@ -56,13 +60,15 @@ export function PlayScreen({ matchId }: { matchId: string }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const saveRound = () => {
-    const entries = entriesFrom(match, draft.calls, draft.tricks);
-    const v = validateEntries(entries, match.players, { enforceThirteen: data.settings.enforceThirteen });
+  const tableMode = data.settings.entryStyle === 'table';
+
+  const commitRound = (entries: RoundEntry[], enforceThirteen: boolean, ignoreTotal = false) => {
+    const v = validateEntries(entries, match.players, { enforceThirteen, ignoreTotal });
     if (!v.ok) { setErrors(v.errors); return; }
-    const next = addRound(match, entries);
-    save(next);
+    save(addRound(match, entries));
     setErrors([]);
+    setShowErrors(false);
+    setTexts(match.players.map(() => ''));
     setJustSaved(true);
     const anyMade = entries.some((e) => isCallMade(e.call, e.tricks));
     const anyFail = entries.some((e) => !isCallMade(e.call, e.tricks));
@@ -70,10 +76,33 @@ export function PlayScreen({ matchId }: { matchId: string }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const saveRound = () => commitRound(entriesFrom(match, draft.calls, draft.tricks), data.settings.enforceThirteen);
+
+  const saveTableRound = () => {
+    setShowErrors(true);
+    const errs = entryErrors(match, texts);
+    if (errs.length) { setErrors(errs); return; }
+    const entries: RoundEntry[] = match.players.map((p, i) => {
+      const r = parseScoreText(texts[i], match.scoringId);
+      if (!r.ok) throw new Error('unreachable: validated above');
+      return { playerId: p.id, call: r.call, tricks: r.tricks };
+    });
+    // Tricks are inferred from typed scores, so the "adds up to 13" checks can't apply here.
+    commitRound(entries, false, true);
+  };
+
+  const setText = (i: number, value: string) => {
+    setErrors([]);
+    setTexts((t) => t.map((v, k) => (k === i ? value : v)));
+  };
+
   const undo = async () => {
     const last = match.rounds[match.rounds.length - 1];
     if (!last) return;
     const prev = undoLastRound(match);
+    const lastScore = scoreRound(match, last);
+    setTexts(match.players.map((p) => scoreText(lastScore.player[p.id] ?? 0)));
+    setShowErrors(false);
     // Keep the removed round's numbers so the user can correct them instead of retyping.
     save({
       ...prev,
@@ -95,7 +124,9 @@ export function PlayScreen({ matchId }: { matchId: string }) {
       }
       return;
     }
-    const pending = draft.step === 'tricks' || draft.calls.some((c, i) => c !== 1 || draft.tricks[i] !== 0);
+    const pending = tableMode
+      ? texts.some((t) => t.trim() !== '')
+      : draft.step === 'tricks' || draft.calls.some((c, i) => c !== 1 || draft.tricks[i] !== 0);
     const ok = await confirmDialog({
       title: 'Finish this match?',
       message: pending
@@ -133,7 +164,7 @@ export function PlayScreen({ matchId }: { matchId: string }) {
               return (
                 <div className="result-line" key={e.playerId}>
                   <Avatar avatar={p.avatar} name={p.name} size={28} />
-                  <span className="nm">{p.name} <span className="hint">called {e.call}, won {e.tricks}</span></span>
+                  <span className="nm">{p.name}{!tableMode && <span className="hint"> called {e.call}, won {e.tricks}</span>}</span>
                   <span className={'badge ' + (made ? 'good' : 'bad')}>{made ? '✓ Made' : '✗ Failed'}</span>
                   <b className="num" style={{ minWidth: 52, textAlign: 'right' }}>{fmt(lastScores.player[e.playerId])}</b>
                 </div>
@@ -162,25 +193,40 @@ export function PlayScreen({ matchId }: { matchId: string }) {
               <button type="button" className="btn small" onClick={() => void undo()} aria-label="Undo last round and correct it">↶ Undo last</button>
             )}
           </div>
-          <div className="steps" aria-label="Round steps">
-            <div className={'step-pill' + (draft.step === 'calls' ? ' on' : '')} aria-current={draft.step === 'calls' ? 'step' : undefined}>1 · Calls</div>
-            <div className={'step-pill' + (draft.step === 'tricks' ? ' on' : '')} aria-current={draft.step === 'tricks' ? 'step' : undefined}>2 · Tricks won</div>
-          </div>
-          <RoundForm
-            key={`${roundNo}-${draft.step}`}
-            match={match}
-            calls={draft.calls}
-            tricks={draft.tricks}
-            mode={draft.step}
-            onCall={(i, n) => updateDraft((d) => ({ ...d, calls: d.calls.map((v, k) => (k === i ? n : v)) }))}
-            onTricks={(i, n) => updateDraft((d) => ({ ...d, tricks: d.tricks.map((v, k) => (k === i ? n : v)) }))}
-          />
+          {tableMode ? (
+            <>
+              <ScoreSheet match={match} texts={texts} onText={setText} onSubmit={saveTableRound} onEdit={setEditing} showErrors={showErrors} />
+              <p className="hint">
+                Type each player’s score in the last row: <b>4.1</b> (called 4, won 5), <b>5</b> (made it exactly) or <b>-4</b> (failed a call of 4).
+                Totals update as you type.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="steps" aria-label="Round steps">
+                <div className={'step-pill' + (draft.step === 'calls' ? ' on' : '')} aria-current={draft.step === 'calls' ? 'step' : undefined}>1 · Calls</div>
+                <div className={'step-pill' + (draft.step === 'tricks' ? ' on' : '')} aria-current={draft.step === 'tricks' ? 'step' : undefined}>2 · Tricks won</div>
+              </div>
+              <RoundForm
+                key={`${roundNo}-${draft.step}`}
+                match={match}
+                calls={draft.calls}
+                tricks={draft.tricks}
+                mode={draft.step}
+                onCall={(i, n) => updateDraft((d) => ({ ...d, calls: d.calls.map((v, k) => (k === i ? n : v)) }))}
+                onTricks={(i, n) => updateDraft((d) => ({ ...d, tricks: d.tricks.map((v, k) => (k === i ? n : v)) }))}
+              />
+            </>
+          )}
           {errors.length > 0 && (
             <div className="banner" role="alert"><span aria-hidden="true">⚠️</span><ul style={{ margin: 0, paddingLeft: 18 }}>{errors.map((e) => <li key={e}>{e}</li>)}</ul></div>
           )}
+          <button type="button" className="btn small ghost" onClick={() => void actions.updateSettings({ entryStyle: tableMode ? 'steppers' : 'table' })}>
+            {tableMode ? 'Use call / tricks buttons instead' : 'Use the score table instead'}
+          </button>
         </section>
 
-        {match.rounds.length > 0 && (
+        {!tableMode && match.rounds.length > 0 && (
           <section className="stack-sm" aria-label="Rounds so far">
             <div className="row">
               <h2 className="section-title" style={{ flex: 1, margin: 0 }}>Rounds so far</h2>
@@ -195,7 +241,9 @@ export function PlayScreen({ matchId }: { matchId: string }) {
 
       <div className="play-bar">
         <div className="play-bar-inner">
-          {draft.step === 'calls' ? (
+          {tableMode ? (
+            <button key="save-table" type="button" className="btn primary" onClick={saveTableRound}>✓ Save round {roundNo}</button>
+          ) : draft.step === 'calls' ? (
             <button key="to-tricks" type="button" className="btn primary" onClick={goTricks}>Calls set → Enter tricks</button>
           ) : (
             <>

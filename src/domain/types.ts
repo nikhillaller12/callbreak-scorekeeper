@@ -4,6 +4,8 @@ export type GameMode = 'individual' | 'teams2' | 'teams4';
 export type ScoringId = 'standard' | 'whole';
 export type MatchStatus = 'in_progress' | 'completed';
 export type ThemeSetting = 'dark' | 'light';
+/** How scores are entered during a match: typing into the score table, or call/tricks steppers. */
+export type EntryStyle = 'table' | 'steppers';
 
 export interface Avatar {
   /** Background colour (CSS hex). */
@@ -100,6 +102,7 @@ export interface Settings {
   defaultScoring: ScoringId;
   /** When true the tricks of a round must add up to 13 before it can be saved. */
   enforceThirteen: boolean;
+  entryStyle: EntryStyle;
   /** Player ids used in the last match, to pre-fill the next setup. */
   lastPlayerIds: string[];
 }
@@ -138,5 +141,6 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultMode: 'teams2',
   defaultScoring: 'standard',
   enforceThirteen: false,
+  entryStyle: 'table',
   lastPlayerIds: [],
 };

@@ -119,6 +119,10 @@ await page.waitForSelector('.scoreboard');
 ok(Date.now() - t0 < 3000, 'match starts immediately after one tap');
 t = await text('.scoreboard');
 ok(t.includes('Round 1') && t.includes('Team A') && t.includes('Team B'), 'scoreboard shows round 1 and both teams');
+ok(await page.$('.score-sheet') !== null, 'score table is the default entry style');
+// The steppers flow is the original entry style; keep covering it here.
+await clickText('Use call / tricks buttons instead');
+await page.waitForSelector('[aria-label="Nikhil call 1"]');
 
 // ---------------------------------------------------------------- 3. five rounds
 section('Scoring 5 rounds');
@@ -446,6 +450,68 @@ ok((await text()).includes('Team: Nikhil'), '4-team mode: each player is a team'
 await clickText('Start match');
 await page.waitForSelector('.scoreboard');
 ok((await text('.scoreboard')).includes('Nikhil') , '4-team scoreboard rendered');
+await hash('#/');
+
+// ---------------------------------------------------------------- 13b. score table entry
+section('Score table entry (2 teams)');
+await hash('#/new');
+await page.waitForSelector('input[placeholder="Player 1 name"]');
+await clickText('2 Teams');
+await clickText('Start match');
+await page.waitForSelector('.scoreboard');
+await page.waitForSelector('[aria-label="Nikhil call 1"]');
+await clickText('Use the score table instead');
+await page.waitForSelector('.score-sheet');
+t = await text('.score-sheet');
+ok(/Team A/.test(t) && /Team B/.test(t) && t.includes('Nikhil') && t.includes('Gaurav'), 'table shows players grouped under their teams');
+await noHScroll('score table @375');
+const typeScores = async (vals) => {
+  for (let i = 0; i < 4; i++) await setValue(`input[aria-label="${names[i]} score, round ${typeScores.round}"]`, vals[i]);
+};
+typeScores.round = 1;
+await typeScores(['4.1', '3', '-5', '+2.1']);
+t = await text('.score-sheet tfoot');
+ok(t.includes('7.1') && t.includes('-2.9'), 'live totals while typing: Team A 7.1, Team B -2.9');
+await shot('15-score-table-mobile');
+// the +/- button flips a sign
+await click('[aria-label="Switch Rahul between plus and minus"]');
+ok((await page.$eval('input[aria-label="Rahul score, round 1"]', (e) => e.value)) === '5', '+/- button flips -5 to 5');
+await click('[aria-label="Switch Rahul between plus and minus"]');
+// Enter on the last cell saves the round
+await page.focus('input[aria-label="Gaurav score, round 1"]');
+await page.keyboard.press('Enter');
+await page.waitForSelector('.result-panel');
+t = await text('.score-sheet tbody');
+ok(t.includes('4.1') && t.includes('-5.0') && t.includes('2.1'), 'saved round appears as a row in the table');
+ok((await page.$eval('input[aria-label="Nikhil score, round 2"]', (e) => e.value)) === '', 'entry row is cleared for round 2');
+// validation
+await setValue('input[aria-label="Nikhil score, round 2"]', '13.5');
+await clickText('Save round 2');
+await sleep(200);
+t = await text();
+ok(/Amit: enter a score/.test(t) && /Nikhil: .*(tricks|possible)/.test(t), 'missing/invalid typed scores show friendly per-player messages');
+ok((await page.$eval('input[aria-label="Amit score, round 2"]', (e) => e.getAttribute('aria-invalid'))) === 'true', 'invalid cell is flagged');
+await setValue('input[aria-label="Nikhil score, round 2"]', '5');
+await setValue('input[aria-label="Amit score, round 2"]', '-3');
+await setValue('input[aria-label="Rahul score, round 2"]', '4.3');
+await setValue('input[aria-label="Gaurav score, round 2"]', '2');
+await clickText('Save round 2');
+await page.waitForSelector('.result-panel');
+t = await text('.score-sheet tfoot');
+ok(t.includes('9.1') && t.includes('3.4'), 'team totals after two rounds: Team A 9.1, Team B 3.4');
+t = await text('.scoreboard');
+ok(t.includes('Round 3'), 'scoreboard advances after table entry');
+// undo puts the numbers back into the table
+await clickText('Undo last');
+await sleep(250);
+ok((await page.$eval('input[aria-label="Rahul score, round 2"]', (e) => e.value)) === '4.3', 'undo restores the typed scores for correction');
+await setValue('input[aria-label="Rahul score, round 2"]', '4');
+await clickText('Save round 2');
+await page.waitForSelector('.result-panel');
+// edit an earlier round from the table
+await click('[aria-label="Edit round 1"]');
+await page.waitForSelector('.sheet');
+await clickText('Cancel', '.sheet');
 await hash('#/');
 
 // ---------------------------------------------------------------- 14. responsive: 320 / tablet / desktop

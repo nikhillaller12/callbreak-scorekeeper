@@ -146,7 +146,7 @@ export interface Validation {
 export function validateEntries(
   entries: RoundEntry[],
   players: Pick<MatchPlayer, 'id' | 'name'>[],
-  opts: { enforceThirteen?: boolean } = {},
+  opts: { enforceThirteen?: boolean; /** Skip the tricks-sum checks (table entry infers tricks from typed scores). */ ignoreTotal?: boolean } = {},
 ): Validation {
   const errors: string[] = [];
   const byId = new Map(entries.map((e) => [e.playerId, e]));
@@ -160,7 +160,7 @@ export function validateEntries(
     if (!isValidTricks(e.tricks)) errors.push(`${p.name}: tricks must be a whole number from 0 to 13`);
   }
   if (entries.length !== players.length) errors.push('Each player needs exactly one entry');
-  if (errors.length === 0) {
+  if (errors.length === 0 && !opts.ignoreTotal) {
     const total = entries.reduce((a, e) => a + e.tricks, 0);
     if (opts.enforceThirteen && total !== TRICKS_PER_ROUND) {
       errors.push(`Tricks add up to ${total}, but a round has ${TRICKS_PER_ROUND}`);

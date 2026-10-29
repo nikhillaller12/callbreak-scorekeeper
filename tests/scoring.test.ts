@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateScore, getScoringRule, isCallMade } from '../src/domain/scoring';
+import { calculateScore, getScoringRule, isCallMade, parseScoreText } from '../src/domain/scoring';
 
 describe('calculateScore (standard)', () => {
   it('made call exactly', () => {
@@ -52,5 +52,40 @@ describe('alternate rule + helpers', () => {
   it('isCallMade', () => {
     expect(isCallMade(4, 4)).toBe(true);
     expect(isCallMade(4, 3)).toBe(false);
+  });
+});
+
+describe('parseScoreText (typed table entry)', () => {
+  it('round-trips every score the standard rule can produce', () => {
+    for (let call = 1; call <= 13; call++) {
+      for (let tricks = 0; tricks <= 13; tricks++) {
+        const score = calculateScore(call, tricks);
+        const r = parseScoreText(String(score));
+        // Failed calls are stored with tricks = 0, which still scores -call.
+        expect(r.ok, `score ${score}`).toBe(true);
+        if (r.ok) expect(r.score).toBe(score);
+      }
+    }
+  });
+  it('accepts made calls with an optional plus sign', () => {
+    expect(parseScoreText('4.1')).toMatchObject({ ok: true, call: 4, tricks: 5, score: 4.1 });
+    expect(parseScoreText('+5')).toMatchObject({ ok: true, call: 5, tricks: 5, score: 5 });
+    expect(parseScoreText('0')).toMatchObject({ ok: true, call: 0, tricks: 0, score: 0 });
+    expect(parseScoreText('4,2')).toMatchObject({ ok: true, call: 4, tricks: 6, score: 4.2 });
+  });
+  it('treats a negative score as a failed call', () => {
+    const r = parseScoreText('-4');
+    expect(r).toMatchObject({ ok: true, call: 4, score: -4 });
+    expect(r.ok && r.tricks < r.call).toBe(true);
+    expect(parseScoreText('\u22125')).toMatchObject({ ok: true, call: 5, score: -5 });
+  });
+  it('rejects invalid input', () => {
+    for (const bad of ['', '  ', 'abc', '4.12', '-4.1', '14', '13.1', '5.9', '--3', '1e3', 'NaN', 'Infinity']) {
+      expect(parseScoreText(bad).ok, bad).toBe(false);
+    }
+  });
+  it('rejects scores the active rule cannot produce', () => {
+    expect(parseScoreText('4.1', 'whole').ok).toBe(false);
+    expect(parseScoreText('4', 'whole')).toMatchObject({ ok: true, call: 4, score: 4 });
   });
 });

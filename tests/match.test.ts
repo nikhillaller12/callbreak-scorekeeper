@@ -163,3 +163,15 @@ describe('validation', () => {
     expect(validateSetup({ mode: 'teams2', scoringId: 'standard', players, teams: [teams[0], { ...teams[1], name: 'team a' }] }).ok).toBe(false);
   });
 });
+
+describe('validateEntries ignoreTotal (table entry)', () => {
+  const ps = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }];
+  const es = [{ playerId: 'a', call: 4, tricks: 10 }, { playerId: 'b', call: 5, tricks: 7 }];
+  it('rejects >13 tricks by default but allows it when tricks are inferred', () => {
+    expect(validateEntries(es, ps).ok).toBe(false);
+    expect(validateEntries(es, ps, { ignoreTotal: true }).ok).toBe(true);
+  });
+  it('still rejects out-of-range values', () => {
+    expect(validateEntries([{ ...es[0], call: 14 }, es[1]], ps, { ignoreTotal: true }).ok).toBe(false);
+  });
+});

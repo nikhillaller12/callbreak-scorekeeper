@@ -105,7 +105,15 @@ export function SettingsScreen() {
               </select>
             )}
           </Field>
-          <Toggle label="Require 13 tricks per round" hint="When on, a round can only be saved if tricks add up to exactly 13" checked={s.enforceThirteen} onChange={(v) => set({ enforceThirteen: v })} />
+          <Field label="Score entry" hint="Table: type each score (4.1, 5, -4) straight into the scorecard. Buttons: pick calls and tricks won.">
+            {(id) => (
+              <select id={id} value={s.entryStyle} onChange={(e) => set({ entryStyle: e.target.value === 'steppers' ? 'steppers' : 'table' })}>
+                <option value="table">Score table (type + or − scores)</option>
+                <option value="steppers">Call / tricks buttons</option>
+              </select>
+            )}
+          </Field>
+          <Toggle label="Require 13 tricks per round" hint="Call / tricks buttons only: a round can only be saved if tricks add up to exactly 13" checked={s.enforceThirteen} onChange={(v) => set({ enforceThirteen: v })} />
         </section>
 
         <section className="card stack-sm" aria-label="Manage">

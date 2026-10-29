@@ -179,6 +179,7 @@ export function sanitizeSettings(v: unknown): Settings {
     defaultMode: MODES.includes(o.defaultMode as GameMode) ? (o.defaultMode as GameMode) : DEFAULT_SETTINGS.defaultMode,
     defaultScoring: SCORINGS.includes(o.defaultScoring as ScoringId) ? (o.defaultScoring as ScoringId) : DEFAULT_SETTINGS.defaultScoring,
     enforceThirteen: bool(o.enforceThirteen, DEFAULT_SETTINGS.enforceThirteen),
+    entryStyle: o.entryStyle === 'steppers' ? 'steppers' : 'table',
     lastPlayerIds: Array.isArray(o.lastPlayerIds) ? o.lastPlayerIds.filter((x): x is string => typeof x === 'string').slice(0, 4) : [],
   };
 }
