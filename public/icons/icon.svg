@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="35%" r="75%">
+      <stop offset="0" stop-color="#14573d"/>
+      <stop offset="1" stop-color="#072418"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <rect x="26" y="26" width="460" height="460" rx="90" fill="none" stroke="#e8c766" stroke-width="8"/>
+  <rect x="150" y="96" width="212" height="300" rx="26" fill="#f6efd8" transform="rotate(-8 256 246)"/>
+  <rect x="150" y="96" width="212" height="300" rx="26" fill="#fffaf0" stroke="#e8c766" stroke-width="6" transform="rotate(6 256 246)"/>
+  <g transform="rotate(6 256 246)" fill="#0f3d2b">
+    <path d="M256 150c-30 38-76 62-76 100 0 28 22 46 46 46 14 0 24-6 30-16-2 20-8 38-20 52h40c-12-14-18-32-20-52 6 10 16 16 30 16 24 0 46-18 46-46 0-38-46-62-76-100z" transform="translate(0 -4)"/>
+    <text x="174" y="150" font-family="Georgia, serif" font-size="40" font-weight="700">A</text>
+  </g>
+  <text x="256" y="452" text-anchor="middle" font-family="Georgia, serif" font-size="40" font-weight="700" fill="#e8c766" letter-spacing="6">CALL BREAK</text>
+</svg>
